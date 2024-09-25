@@ -59,4 +59,4 @@
 
 ## **Author**
 
-**Created by:** [AnonKryptiQuz](https://x.com/AnonKryptiQuz), [Coffinxp7](https://x.com/coffinxp7), [hexsh1dow](https://x.com/hexsh1dow), and [Naho](https://x.com/NahoXSS) 
+**Created by:** [AnonKryptiQuz](https://AnonKryptiQuz.github.io/)
