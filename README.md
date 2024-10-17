@@ -57,6 +57,10 @@
 - **A simple HTML form is provided for users to enter the site URL and configuration settings.**
 - **Results are displayed dynamically on the same page using JavaScript.**
 
+## **Disclaimer**
+
+- **Educational Purposes Only**: ICU-WP is intended for educational and research use. The tool should not be used for illegal or malicious activities. It is the user’s responsibility to ensure compliance with local laws and regulations.
+
 ## **Author**
 
 **Created by:** [AnonKryptiQuz](https://AnonKryptiQuz.github.io/)
