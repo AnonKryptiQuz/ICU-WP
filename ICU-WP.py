@@ -17,6 +17,7 @@ USER_AGENTS = [
 
 request_timeout = 5
 found_users = []
+scanned_url = ""
 
 session = requests.Session()
 retries = Retry(total=3, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
@@ -112,6 +113,7 @@ app = Flask(__name__)
 def index():
     global request_timeout
     global found_users
+    global scanned_url
     result_message = ""
     status = "success"
 
@@ -120,6 +122,7 @@ def index():
         request_timeout = int(request.form.get('timeout', 5))
         threads = int(request.form.get('threads', 5))
         found_users = []
+        scanned_url = site_url
 
         if not check_wordpress(site_url):
             result_message = f"{site_url} does not appear to be a WordPress site."
@@ -130,13 +133,13 @@ def index():
             user_details_check(site_url, threads)
             wordpress_com_api_check(site_url)
 
-            found_users = set(found_users)
+            found_users = list(set(found_users))
             if found_users:
                 result_message = f"Found the following usernames: {', '.join(found_users)}"
             else:
                 result_message = f"No vulnerable username enumeration found on {site_url}."
 
-        return jsonify({"status": status, "message": result_message})
+        return jsonify({"status": status, "message": result_message, "usernames": found_users, "url": scanned_url})
 
     return render_template_string(r'''
         <!DOCTYPE html>
@@ -218,7 +221,7 @@ def index():
                     color: #ccc;
                 }
 
-                input[type="text"], input[type="number"], input[type="submit"] {
+                input[type="text"], input[type="number"], input[type="submit"], button {
                     padding: 12px;
                     border: 1px solid #333;
                     border-radius: 4px;
@@ -228,17 +231,33 @@ def index():
                     color: #fff;
                 }
 
-                input[type="submit"] {
+                input[type="submit"], button {
                     background-color: #00ff00;
                     color: #1c1c1c;
                     border: none;
                     cursor: pointer;
                     font-size: 16px;
                     transition: background-color 0.3s;
+                    font-weight: bold;
                 }
 
-                input[type="submit"]:hover {
+                input[type="submit"]:hover, button:hover {
                     background-color: #00cc00;
+                }
+
+                button:disabled {
+                    background-color: #555;
+                    cursor: not-allowed;
+                    opacity: 0.5;
+                }
+
+                .export-btn {
+                    margin-top: 15px;
+                    display: none;
+                }
+
+                .export-btn.show {
+                    display: block;
                 }
 
                 .loader {
@@ -331,7 +350,7 @@ def index():
                     <h1>ICU-WP: I See You, WordPress</h1>
                     <form id="scan-form" method="post">
                         <label for="site_url">Enter the WordPress website URL:</label>
-                        <input type="text" id="site_url" name="site_url" required>
+                        <input placeholder="https://example.com/" type="text" id="site_url" name="site_url" required>
 
                         <label for="timeout">Request timeout (1-10 seconds):</label>
                         <input type="number" id="timeout" name="timeout" value="5" min="1" max="10">
@@ -344,6 +363,10 @@ def index():
 
                     <div class="loader" id="loader"></div>
                     <div class="result" id="result"></div>
+                    
+                    <button id="export-btn" class="export-btn" onclick="exportToTxt()">
+                         Export Usernames
+                    </button>
 
                     <div class="footer">
                         <p>Created by: <a href="https://AnonKryptiQuz.github.io" target="_blank" rel="noopener noreferrer">AnonKryptiQuz</a></p>
@@ -356,6 +379,11 @@ def index():
             </div>
 
             <script>
+                let scanData = {
+                    url: '',
+                    usernames: []
+                };
+
                 document.getElementById('scan-form').addEventListener('submit', function(event) {
                     event.preventDefault();
                     const siteUrl = document.getElementById('site_url').value.trim();
@@ -368,6 +396,7 @@ def index():
 
                     document.getElementById('loader').classList.add('show');
                     document.getElementById('result').classList.remove('show');
+                    document.getElementById('export-btn').classList.remove('show');
                     document.getElementById('container').style.boxShadow = '0 0 20px rgba(255, 255, 0, 0.3), 0 0 40px rgba(255, 255, 0, 0.5), 0 0 20px rgba(255, 255, 0, 0.3), 0 0 40px rgba(255, 255, 0, 0.5)';
 
                     const formData = new FormData(this);
@@ -381,12 +410,19 @@ def index():
                         document.getElementById('result').classList.add('show');
                         const resultDiv = document.getElementById('result');
                         
+                        scanData.url = data.url;
+                        scanData.usernames = data.usernames || [];
+                        
                         if (data.status === 'error') {
                             document.getElementById('container').style.boxShadow = '0 0 20px rgba(255, 0, 0, 0.3), 0 0 40px rgba(255, 0, 0, 0.5), 0 0 20px rgba(255, 0, 0, 0.3), 0 0 40px rgba(255, 0, 0, 0.5)';
                             resultDiv.innerHTML = `<h2 style="color: #ff0000; text-shadow: 0 0 5px #ff0000;">Error</h2><p>${data.message}</p>`;
                         } else {
                             document.getElementById('container').style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.3), 0 0 40px rgba(0, 255, 0, 0.5), 0 0 20px rgba(0, 255, 0, 0.3), 0 0 40px rgba(0, 255, 0, 0.5)';
                             resultDiv.innerHTML = `<h2>Scan Results</h2><p>${data.message}</p>`;
+                            
+                            if (scanData.usernames.length > 0) {
+                                document.getElementById('export-btn').classList.add('show');
+                            }
                         }
                     })
 
@@ -397,6 +433,47 @@ def index():
                         document.getElementById('result').innerHTML = `<h2>Error</h2><p>${error.message}</p>`;
                     });
                 });
+
+                function exportToTxt() {
+                    if (!scanData.usernames || scanData.usernames.length === 0) {
+                        alert('No usernames to export!');
+                        return;
+                    }
+
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+                    const domain = scanData.url.replace(/^https?:\/\//, '').replace(/\//g, '_');
+                    const filename = `ICU-WP_${domain}_${timestamp}.txt`;
+
+                    let content = '='.repeat(60) + '\n';
+                    content += 'ICU-WP: WordPress Username Enumeration Results\n';
+                    content += '='.repeat(60) + '\n\n';
+                    content += `Target URL: ${scanData.url}\n`;
+                    content += `Scan Date: ${new Date().toLocaleString()}\n`;
+                    content += `Total Usernames Found: ${scanData.usernames.length}\n\n`;
+                    content += '='.repeat(60) + '\n';
+                    content += 'DISCOVERED USERNAMES:\n';
+                    content += '='.repeat(60) + '\n\n';
+                    
+                    scanData.usernames.forEach((username, index) => {
+                        content += `${index + 1}. ${username}\n`;
+                    });
+                    
+                    content += '\n' + '='.repeat(60) + '\n';
+                    content += 'Generated by ICU-WP - I See You, WordPress\n';
+                    content += 'Created by: AnonKryptiQuz\n';
+                    content += 'https://AnonKryptiQuz.github.io\n';
+                    content += '='.repeat(60) + '\n';
+
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }
             </script>
         </body>
         </html>
